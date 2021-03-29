@@ -339,7 +339,10 @@ void Http::priv::http_perform()
 	::curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, static_cast<void*>(this));
 #endif
 
-	::curl_easy_setopt(curl, CURLOPT_VERBOSE, get_logging_level() >= 5);
+	::curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L/*get_logging_level() >= 5*/);
+
+	FILE* logfile = fopen("curlout.txt", "wb");
+	curl_easy_setopt(curl, CURLOPT_STDERR, logfile);
 
 	if (headerlist != nullptr) {
 		::curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerlist);
