@@ -157,8 +157,9 @@ bool OctoPrint::validate_version_text(const boost::optional<std::string> &versio
 void OctoPrint::set_auth(Http &http) const
 {
     http.header("X-Api-Key", apikey);
-
-    if (! cafile.empty()) {
+    BOOST_LOG_TRIVIAL(debug) << "CAFILE: " << cafile;
+    if (!cafile.empty()) {
+        BOOST_LOG_TRIVIAL(debug) << "ca file set";
         http.ca_file(cafile);
     }
 }
