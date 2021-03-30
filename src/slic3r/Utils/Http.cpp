@@ -340,9 +340,7 @@ void Http::priv::http_perform()
 #endif
 
 	::curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L/*get_logging_level() >= 5*/);
-
-	FILE* logfile = fopen("curlout.txt", "wb");
-	curl_easy_setopt(curl, CURLOPT_STDERR, logfile);
+	::curl_easy_setopt(curl, CURLOPT_STDERR, stdout);
 
 	if (headerlist != nullptr) {
 		::curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headerlist);
