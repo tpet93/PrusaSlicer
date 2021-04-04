@@ -3663,8 +3663,85 @@ void Plater::priv::on_process_completed(SlicingProcessCompletedEvent &evt)
                 // Don't offer the "Eject" button on ChromeOS, the Linux side has no control over it.
                 platform_flavor() != PlatformFlavor::LinuxOnChromium);
             wxGetApp().removable_drive_manager()->set_exporting_finished(true);
-        }else if (exporting_status == ExportingStatus::EXPORTING_TO_LOCAL && !has_error)
-            notification_manager->push_exporting_finished_notification(last_output_path, last_output_dir_path, false);
+        }
+        else if (exporting_status == ExportingStatus::EXPORTING_TO_LOCAL && !has_error)
+        {
+            std::string filepath = last_output_path.substr(19);
+
+            std::stringstream command;
+            boost::replace_all(filepath,"\\", "/");
+            command << "wsl ~/klippy-env/bin/python ~/klipper/klippy/klippy.py ~/printer.cfg -i \""<< filepath<<"\" -o test.serial --dictionary /home/tony/klipper/out/klipper.dict > klipper_output.txt && rm test.serial";
+            std::system(command.str().c_str());
+
+
+
+            std::string filenameo = "testo.txt";
+            std::ofstream fout(filenameo, std::ofstream::out);
+            fout << command.str();
+            fout.close();
+
+
+            std::string filename = "klipper_output.txt";
+
+
+            std::ifstream fin;
+            fin.open(filename);
+            if (fin.is_open())
+            {
+                std::stringstream line;
+                std::string lastLine;
+
+                char c;
+                while (fin.get(c)) // loop getting single characters
+                {
+                    line << c;
+                    if (c == '\n')
+                    {
+                        std::size_t found = line.str().find("print time");
+                        if (found != std::string::npos)
+                        {
+                            lastLine = line.str().substr(found+11);
+                            break;
+
+                        }
+                        else
+                            line.str("");
+
+                    }
+                }
+
+                float seconds = std::stof(lastLine);
+
+
+                int value = (int)seconds+0.5;
+                std::string resulttime;
+                // compute h, m, s
+                std::string h = std::to_string(value / 3600);
+                std::string m = std::to_string((value % 3600) / 60);
+                std::string s = std::to_string(value % 60);
+                // add leading zero if needed
+                std::string hh = std::string(2 - h.length(), '0') + h;
+                std::string mm = std::string(2 - m.length(), '0') + m;
+                std::string ss = std::string(2 - s.length(), '0') + s;
+                // return mm:ss if hh is 00
+                if (hh.compare("00") != 0) {
+                    resulttime = hh + ':' + mm + ":" + ss;
+                }
+                else {
+                    resulttime = mm + ":" + ss;
+                }
+
+                std::stringstream time_estimate;
+                time_estimate << "Klipper Time Estimate : " << resulttime << 's\n' << seconds << " seconds";
+                fin.close();
+
+
+                BOOST_LOG_TRIVIAL(info) << "hello";
+
+
+                notification_manager->push_exporting_finished_notification(time_estimate.str(), "", false);
+            }
+        }
     }
     exporting_status = ExportingStatus::NOT_EXPORTING;
 }
