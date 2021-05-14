@@ -7,6 +7,7 @@
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/log/trivial.hpp>
 #include <boost/thread.hpp>
 
 #include <float.h>
@@ -17,6 +18,152 @@ namespace Slic3r {
 //! return same string
 #define L(s) (s)
 #define _(s) Slic3r::I18N::translate(s)
+
+static t_config_enum_names enum_names_from_keys_map(const t_config_enum_values &enum_keys_map)
+{
+    t_config_enum_names names;
+    int cnt = 0;
+    for (const auto& kvp : enum_keys_map)
+        cnt = std::max(cnt, kvp.second);
+    cnt += 1;
+    names.assign(cnt, "");
+    for (const auto& kvp : enum_keys_map)
+        names[kvp.second] = kvp.first;
+    return names;
+}
+
+#define CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(NAME) \
+    static t_config_enum_names s_keys_names_##NAME = enum_names_from_keys_map(s_keys_map_##NAME); \
+    template<> const t_config_enum_values& ConfigOptionEnum<NAME>::get_enum_values() { return s_keys_map_##NAME; } \
+    template<> const t_config_enum_names& ConfigOptionEnum<NAME>::get_enum_names() { return s_keys_names_##NAME; }
+
+static t_config_enum_values s_keys_map_PrinterTechnology {
+    { "FFF",            ptFFF },
+    { "SLA",            ptSLA }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(PrinterTechnology)
+
+static t_config_enum_values s_keys_map_GCodeFlavor {
+    { "reprap",         gcfRepRapSprinter },
+    { "reprapfirmware", gcfRepRapFirmware },
+    { "repetier",       gcfRepetier },
+    { "teacup",         gcfTeacup },
+    { "makerware",      gcfMakerWare },
+    { "marlin",         gcfMarlinLegacy },
+    { "marlinfirmware", gcfMarlinFirmware },
+    { "sailfish",       gcfSailfish },
+    { "smoothie",       gcfSmoothie },
+    { "mach3",          gcfMach3 },
+    { "machinekit",     gcfMachinekit },
+    { "no-extrusion",   gcfNoExtrusion }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(GCodeFlavor)
+
+static t_config_enum_values s_keys_map_MachineLimitsUsage {
+    { "emit_to_gcode",      int(MachineLimitsUsage::EmitToGCode) },
+    { "time_estimate_only", int(MachineLimitsUsage::TimeEstimateOnly) },
+    { "ignore",             int(MachineLimitsUsage::Ignore) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(MachineLimitsUsage)
+
+static t_config_enum_values s_keys_map_PrintHostType {
+    { "octoprint",      htOctoPrint },
+    { "duet",           htDuet },
+    { "flashair",       htFlashAir },
+    { "astrobox",       htAstroBox },
+    { "repetier",       htRepetier }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(PrintHostType)
+
+static t_config_enum_values s_keys_map_AuthorizationType {
+    { "key",            atKeyPassword },
+    { "user",           atUserPassword }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(AuthorizationType)
+
+static t_config_enum_values s_keys_map_FuzzySkinType {
+    { "none",           int(FuzzySkinType::None) },
+    { "external",       int(FuzzySkinType::External) },
+    { "all",            int(FuzzySkinType::All) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(FuzzySkinType)
+
+static t_config_enum_values s_keys_map_InfillPattern {
+    { "rectilinear",        ipRectilinear },
+    { "monotonic",          ipMonotonic },
+    { "alignedrectilinear", ipAlignedRectilinear },
+    { "grid",               ipGrid },
+    { "triangles",          ipTriangles },
+    { "stars",              ipStars },
+    { "cubic",              ipCubic },
+    { "line",               ipLine },
+    { "concentric",         ipConcentric },
+    { "honeycomb",          ipHoneycomb },
+    { "3dhoneycomb",        ip3DHoneycomb },
+    { "gyroid",             ipGyroid },
+    { "hilbertcurve",       ipHilbertCurve },
+    { "archimedeanchords",  ipArchimedeanChords },
+    { "octagramspiral",     ipOctagramSpiral },
+    { "adaptivecubic",      ipAdaptiveCubic },
+    { "supportcubic",       ipSupportCubic }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(InfillPattern)
+
+static t_config_enum_values s_keys_map_IroningType {
+    { "top",            int(IroningType::TopSurfaces) },
+    { "topmost",        int(IroningType::TopmostOnly) },
+    { "solid",          int(IroningType::AllSolid) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(IroningType)
+
+static t_config_enum_values s_keys_map_SupportMaterialPattern {
+    { "rectilinear",        smpRectilinear },
+    { "rectilinear-grid",   smpRectilinearGrid },
+    { "honeycomb",          smpHoneycomb }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(SupportMaterialPattern)
+
+static t_config_enum_values s_keys_map_SupportMaterialStyle {
+    { "grid",           smsGrid },
+    { "snug",           smsSnug }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(SupportMaterialStyle)
+
+static t_config_enum_values s_keys_map_SupportMaterialInterfacePattern {
+    { "auto",           smipAuto },
+    { "rectilinear",    smipRectilinear },
+    { "concentric",     smipConcentric }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(SupportMaterialInterfacePattern)
+
+static t_config_enum_values s_keys_map_SeamPosition {
+    { "random",         spRandom },
+    { "nearest",        spNearest },
+    { "aligned",        spAligned },
+    { "rear",           spRear }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(SeamPosition)
+
+static const t_config_enum_values s_keys_map_SLADisplayOrientation = {
+    { "landscape",      sladoLandscape},
+    { "portrait",       sladoPortrait}
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(SLADisplayOrientation)
+
+static const t_config_enum_values s_keys_map_SLAPillarConnectionMode = {
+    {"zigzag",          slapcmZigZag},
+    {"cross",           slapcmCross},
+    {"dynamic",         slapcmDynamic}
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(SLAPillarConnectionMode)
+
+static const t_config_enum_values s_keys_map_BrimType = {
+    {"no_brim",         btNoBrim},
+    {"outer_only",      btOuterOnly},
+    {"inner_only",      btInnerOnly},
+    {"outer_and_inner", btOuterAndInner}
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(BrimType)
 
 static void assign_printer_technology_to_unknown(t_optiondef_map &options, PrinterTechnology printer_technology)
 {
@@ -995,10 +1142,8 @@ void PrintConfigDef::init_fff_params()
     def->label = L("First layer height");
     def->category = L("Layers and Perimeters");
     def->tooltip = L("When printing with very low layer heights, you might still want to print a thicker "
-                   "bottom layer to improve adhesion and tolerance for non perfect build plates. "
-                   "This can be expressed as an absolute value or as a percentage (for example: 150%) "
-                   "over the default layer height.");
-    def->sidetext = L("mm or %");
+                   "bottom layer to improve adhesion and tolerance for non perfect build plates.");
+    def->sidetext = L("mm");
     def->ratio_over = "layer_height";
     def->set_default_value(new ConfigOptionFloatOrPercent(0.35, false));
 
@@ -1103,6 +1248,7 @@ void PrintConfigDef::init_fff_params()
     def->enum_values.push_back("teacup");
     def->enum_values.push_back("makerware");
     def->enum_values.push_back("marlin");
+    def->enum_values.push_back("marlinfirmware");
     def->enum_values.push_back("sailfish");
     def->enum_values.push_back("mach3");
     def->enum_values.push_back("machinekit");
@@ -1113,7 +1259,8 @@ void PrintConfigDef::init_fff_params()
     def->enum_labels.push_back("Repetier");
     def->enum_labels.push_back("Teacup");
     def->enum_labels.push_back("MakerWare (MakerBot)");
-    def->enum_labels.push_back("Marlin");
+    def->enum_labels.push_back("Marlin (legacy)");
+    def->enum_labels.push_back("Marlin Firmware");
     def->enum_labels.push_back("Sailfish (MakerBot)");
     def->enum_labels.push_back("Mach3/LinuxCNC");
     def->enum_labels.push_back("Machinekit");
@@ -1467,21 +1614,34 @@ void PrintConfigDef::init_fff_params()
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionFloats{ 0., 0. });
 
-    // M204 S... [mm/sec^2]
+    // M204 P... [mm/sec^2]
     def = this->add("machine_max_acceleration_extruding", coFloats);
     def->full_label = L("Maximum acceleration when extruding");
     def->category = L("Machine limits");
-    def->tooltip = L("Maximum acceleration when extruding (M204 S)");
+    def->tooltip = L("Maximum acceleration when extruding (M204 P)\n\n"
+                     "Marlin (legacy) firmware flavor will use this also "
+                     "as travel acceleration (M204 T).");
+    def->sidetext = L("mm/s²");
+    def->min = 0;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloats{ 1500., 1250. });
+
+
+    // M204 R... [mm/sec^2]
+    def = this->add("machine_max_acceleration_retracting", coFloats);
+    def->full_label = L("Maximum acceleration when retracting");
+    def->category = L("Machine limits");
+    def->tooltip = L("Maximum acceleration when retracting (M204 R)");
     def->sidetext = L("mm/s²");
     def->min = 0;
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionFloats{ 1500., 1250. });
 
     // M204 T... [mm/sec^2]
-    def = this->add("machine_max_acceleration_retracting", coFloats);
-    def->full_label = L("Maximum acceleration when retracting");
+    def = this->add("machine_max_acceleration_travel", coFloats);
+    def->full_label = L("Maximum acceleration for travel moves");
     def->category = L("Machine limits");
-    def->tooltip = L("Maximum acceleration when retracting (M204 T)");
+    def->tooltip = L("Maximum acceleration for travel moves (M204 T)");
     def->sidetext = L("mm/s²");
     def->min = 0;
     def->mode = comAdvanced;
@@ -1799,8 +1959,8 @@ void PrintConfigDef::init_fff_params()
     def->category = L("Support material");
     def->tooltip = L("Density of the first raft or support layer.");
     def->sidetext = L("%");
-    def->min = 0;
-    def->max = 150;
+    def->min = 10;
+    def->max = 100;
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionPercent(90));
 
@@ -2350,6 +2510,16 @@ void PrintConfigDef::init_fff_params()
     append(def->enum_labels, support_material_interface_layers->enum_labels);
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionInt(-1));
+
+    def = this->add("support_material_closing_radius", coFloat);
+    def->label = L("Closing radius");
+    def->category = L("Support material");
+    def->tooltip = L("For snug supports, the support regions will be merged using morphological closing operation."
+                     " Gaps smaller than the closing radius will be filled in.");
+    def->sidetext = L("mm");
+    def->min = 0;
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionFloat(2));
 
     def = this->add("support_material_interface_spacing", coFloat);
     def->label = L("Interface pattern spacing");
@@ -3585,7 +3755,7 @@ std::string DynamicPrintConfig::validate()
         FullPrintConfig fpc;
         fpc.apply(*this, true);
         // Verify this print options through the FullPrintConfig.
-        return fpc.validate();
+        return Slic3r::validate(fpc);
     }
     default:
         //FIXME no validation on SLA data?
@@ -3594,134 +3764,135 @@ std::string DynamicPrintConfig::validate()
 }
 
 //FIXME localize this function.
-std::string FullPrintConfig::validate()
+std::string validate(const FullPrintConfig &cfg)
 {
     // --layer-height
-    if (this->get_abs_value("layer_height") <= 0)
+    if (cfg.get_abs_value("layer_height") <= 0)
         return "Invalid value for --layer-height";
-    if (fabs(fmod(this->get_abs_value("layer_height"), SCALING_FACTOR)) > 1e-4)
+    if (fabs(fmod(cfg.get_abs_value("layer_height"), SCALING_FACTOR)) > 1e-4)
         return "--layer-height must be a multiple of print resolution";
 
     // --first-layer-height
-    if (this->get_abs_value("first_layer_height") <= 0)
+    if (cfg.first_layer_height.value <= 0)
         return "Invalid value for --first-layer-height";
 
     // --filament-diameter
-    for (double fd : this->filament_diameter.values)
+    for (double fd : cfg.filament_diameter.values)
         if (fd < 1)
             return "Invalid value for --filament-diameter";
 
     // --nozzle-diameter
-    for (double nd : this->nozzle_diameter.values)
+    for (double nd : cfg.nozzle_diameter.values)
         if (nd < 0.005)
             return "Invalid value for --nozzle-diameter";
 
     // --perimeters
-    if (this->perimeters.value < 0)
+    if (cfg.perimeters.value < 0)
         return "Invalid value for --perimeters";
 
     // --solid-layers
-    if (this->top_solid_layers < 0)
+    if (cfg.top_solid_layers < 0)
         return "Invalid value for --top-solid-layers";
-    if (this->bottom_solid_layers < 0)
+    if (cfg.bottom_solid_layers < 0)
         return "Invalid value for --bottom-solid-layers";
 
-    if (this->use_firmware_retraction.value &&
-        this->gcode_flavor.value != gcfSmoothie &&
-        this->gcode_flavor.value != gcfRepRapSprinter &&
-        this->gcode_flavor.value != gcfRepRapFirmware &&
-        this->gcode_flavor.value != gcfMarlin &&
-        this->gcode_flavor.value != gcfMachinekit &&
-        this->gcode_flavor.value != gcfRepetier)
+    if (cfg.use_firmware_retraction.value &&
+        cfg.gcode_flavor.value != gcfSmoothie &&
+        cfg.gcode_flavor.value != gcfRepRapSprinter &&
+        cfg.gcode_flavor.value != gcfRepRapFirmware &&
+        cfg.gcode_flavor.value != gcfMarlinLegacy &&
+        cfg.gcode_flavor.value != gcfMarlinFirmware &&
+        cfg.gcode_flavor.value != gcfMachinekit &&
+        cfg.gcode_flavor.value != gcfRepetier)
         return "--use-firmware-retraction is only supported by Marlin, Smoothie, RepRapFirmware, Repetier and Machinekit firmware";
 
-    if (this->use_firmware_retraction.value)
-        for (unsigned char wipe : this->wipe.values)
+    if (cfg.use_firmware_retraction.value)
+        for (unsigned char wipe : cfg.wipe.values)
              if (wipe)
                 return "--use-firmware-retraction is not compatible with --wipe";
 
     // --gcode-flavor
-    if (! print_config_def.get("gcode_flavor")->has_enum_value(this->gcode_flavor.serialize()))
+    if (! print_config_def.get("gcode_flavor")->has_enum_value(cfg.gcode_flavor.serialize()))
         return "Invalid value for --gcode-flavor";
 
     // --fill-pattern
-    if (! print_config_def.get("fill_pattern")->has_enum_value(this->fill_pattern.serialize()))
+    if (! print_config_def.get("fill_pattern")->has_enum_value(cfg.fill_pattern.serialize()))
         return "Invalid value for --fill-pattern";
 
     // --top-fill-pattern
-    if (! print_config_def.get("top_fill_pattern")->has_enum_value(this->top_fill_pattern.serialize()))
+    if (! print_config_def.get("top_fill_pattern")->has_enum_value(cfg.top_fill_pattern.serialize()))
         return "Invalid value for --top-fill-pattern";
 
     // --bottom-fill-pattern
-    if (! print_config_def.get("bottom_fill_pattern")->has_enum_value(this->bottom_fill_pattern.serialize()))
+    if (! print_config_def.get("bottom_fill_pattern")->has_enum_value(cfg.bottom_fill_pattern.serialize()))
         return "Invalid value for --bottom-fill-pattern";
 
     // --fill-density
-    if (fabs(this->fill_density.value - 100.) < EPSILON &&
-        ! print_config_def.get("top_fill_pattern")->has_enum_value(this->fill_pattern.serialize()))
+    if (fabs(cfg.fill_density.value - 100.) < EPSILON &&
+        ! print_config_def.get("top_fill_pattern")->has_enum_value(cfg.fill_pattern.serialize()))
         return "The selected fill pattern is not supposed to work at 100% density";
 
     // --infill-every-layers
-    if (this->infill_every_layers < 1)
+    if (cfg.infill_every_layers < 1)
         return "Invalid value for --infill-every-layers";
 
     // --skirt-height
-    if (this->skirt_height < 0)
+    if (cfg.skirt_height < 0)
         return "Invalid value for --skirt-height";
 
     // --bridge-flow-ratio
-    if (this->bridge_flow_ratio <= 0)
+    if (cfg.bridge_flow_ratio <= 0)
         return "Invalid value for --bridge-flow-ratio";
 
     // extruder clearance
-    if (this->extruder_clearance_radius <= 0)
+    if (cfg.extruder_clearance_radius <= 0)
         return "Invalid value for --extruder-clearance-radius";
-    if (this->extruder_clearance_height <= 0)
+    if (cfg.extruder_clearance_height <= 0)
         return "Invalid value for --extruder-clearance-height";
 
     // --extrusion-multiplier
-    for (double em : this->extrusion_multiplier.values)
+    for (double em : cfg.extrusion_multiplier.values)
         if (em <= 0)
             return "Invalid value for --extrusion-multiplier";
 
     // --default-acceleration
-    if ((this->perimeter_acceleration != 0. || this->infill_acceleration != 0. || this->bridge_acceleration != 0. || this->first_layer_acceleration != 0.) &&
-        this->default_acceleration == 0.)
+    if ((cfg.perimeter_acceleration != 0. || cfg.infill_acceleration != 0. || cfg.bridge_acceleration != 0. || cfg.first_layer_acceleration != 0.) &&
+        cfg.default_acceleration == 0.)
         return "Invalid zero value for --default-acceleration when using other acceleration settings";
 
     // --spiral-vase
-    if (this->spiral_vase) {
+    if (cfg.spiral_vase) {
         // Note that we might want to have more than one perimeter on the bottom
         // solid layers.
-        if (this->perimeters > 1)
+        if (cfg.perimeters > 1)
             return "Can't make more than one perimeter when spiral vase mode is enabled";
-        else if (this->perimeters < 1)
+        else if (cfg.perimeters < 1)
             return "Can't make less than one perimeter when spiral vase mode is enabled";
-        if (this->fill_density > 0)
+        if (cfg.fill_density > 0)
             return "Spiral vase mode can only print hollow objects, so you need to set Fill density to 0";
-        if (this->top_solid_layers > 0)
+        if (cfg.top_solid_layers > 0)
             return "Spiral vase mode is not compatible with top solid layers";
-        if (this->support_material || this->support_material_enforce_layers > 0)
+        if (cfg.support_material || cfg.support_material_enforce_layers > 0)
             return "Spiral vase mode is not compatible with support material";
     }
 
     // extrusion widths
     {
         double max_nozzle_diameter = 0.;
-        for (double dmr : this->nozzle_diameter.values)
+        for (double dmr : cfg.nozzle_diameter.values)
             max_nozzle_diameter = std::max(max_nozzle_diameter, dmr);
         const char *widths[] = { "external_perimeter", "perimeter", "infill", "solid_infill", "top_infill", "support_material", "first_layer" };
         for (size_t i = 0; i < sizeof(widths) / sizeof(widths[i]); ++ i) {
             std::string key(widths[i]);
             key += "_extrusion_width";
-            if (this->get_abs_value(key, max_nozzle_diameter) > 10. * max_nozzle_diameter)
+            if (cfg.get_abs_value(key, max_nozzle_diameter) > 10. * max_nozzle_diameter)
                 return std::string("Invalid extrusion width (too large): ") + key;
         }
     }
 
     // Out of range validation of numeric values.
-    for (const std::string &opt_key : this->keys()) {
-        const ConfigOption      *opt    = this->optptr(opt_key);
+    for (const std::string &opt_key : cfg.keys()) {
+        const ConfigOption      *opt    = cfg.optptr(opt_key);
         assert(opt != nullptr);
         const ConfigOptionDef   *optdef = print_config_def.get(opt_key);
         assert(optdef != nullptr);
@@ -3766,19 +3937,21 @@ std::string FullPrintConfig::validate()
     return "";
 }
 
-// Declare the static caches for each StaticPrintConfig derived class.
-StaticPrintConfig::StaticCache<class Slic3r::PrintObjectConfig> PrintObjectConfig::s_cache_PrintObjectConfig;
-StaticPrintConfig::StaticCache<class Slic3r::PrintRegionConfig> PrintRegionConfig::s_cache_PrintRegionConfig;
-StaticPrintConfig::StaticCache<class Slic3r::MachineEnvelopeConfig> MachineEnvelopeConfig::s_cache_MachineEnvelopeConfig;
-StaticPrintConfig::StaticCache<class Slic3r::GCodeConfig>       GCodeConfig::s_cache_GCodeConfig;
-StaticPrintConfig::StaticCache<class Slic3r::PrintConfig>       PrintConfig::s_cache_PrintConfig;
-StaticPrintConfig::StaticCache<class Slic3r::FullPrintConfig>   FullPrintConfig::s_cache_FullPrintConfig;
-
-StaticPrintConfig::StaticCache<class Slic3r::SLAMaterialConfig>     SLAMaterialConfig::s_cache_SLAMaterialConfig;
-StaticPrintConfig::StaticCache<class Slic3r::SLAPrintConfig>        SLAPrintConfig::s_cache_SLAPrintConfig;
-StaticPrintConfig::StaticCache<class Slic3r::SLAPrintObjectConfig>  SLAPrintObjectConfig::s_cache_SLAPrintObjectConfig;
-StaticPrintConfig::StaticCache<class Slic3r::SLAPrinterConfig>      SLAPrinterConfig::s_cache_SLAPrinterConfig;
-StaticPrintConfig::StaticCache<class Slic3r::SLAFullPrintConfig>    SLAFullPrintConfig::s_cache_SLAFullPrintConfig;
+// Declare and initialize static caches of StaticPrintConfig derived classes.
+#define PRINT_CONFIG_CACHE_ELEMENT_DEFINITION(r, data, CLASS_NAME) StaticPrintConfig::StaticCache<class Slic3r::CLASS_NAME> BOOST_PP_CAT(CLASS_NAME::s_cache_, CLASS_NAME);
+#define PRINT_CONFIG_CACHE_ELEMENT_INITIALIZATION(r, data, CLASS_NAME) Slic3r::CLASS_NAME::initialize_cache();
+#define PRINT_CONFIG_CACHE_INITIALIZE(CLASSES_SEQ) \
+    BOOST_PP_SEQ_FOR_EACH(PRINT_CONFIG_CACHE_ELEMENT_DEFINITION, _, BOOST_PP_TUPLE_TO_SEQ(CLASSES_SEQ)) \
+    int print_config_static_initializer() { \
+        /* Putting a trace here to avoid the compiler to optimize out this function. */ \
+        BOOST_LOG_TRIVIAL(trace) << "Initializing StaticPrintConfigs"; \
+        BOOST_PP_SEQ_FOR_EACH(PRINT_CONFIG_CACHE_ELEMENT_INITIALIZATION, _, BOOST_PP_TUPLE_TO_SEQ(CLASSES_SEQ)) \
+        return 1; \
+    }
+PRINT_CONFIG_CACHE_INITIALIZE((
+    PrintObjectConfig, PrintRegionConfig, MachineEnvelopeConfig, GCodeConfig, PrintConfig, FullPrintConfig, 
+    SLAMaterialConfig, SLAPrintConfig, SLAPrintObjectConfig, SLAPrinterConfig, SLAFullPrintConfig))
+static int print_config_static_initialized = print_config_static_initializer();
 
 CLIActionsConfigDef::CLIActionsConfigDef()
 {

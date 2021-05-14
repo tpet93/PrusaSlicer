@@ -1083,15 +1083,16 @@ MedialAxis::process_edge_neighbors(const VD::edge_type* edge, ThickPolyline* pol
     }
 }
 
-bool
-MedialAxis::validate_edge(const VD::edge_type* edge)
+bool MedialAxis::validate_edge(const VD::edge_type* edge)
 {
     // prevent overflows and detect almost-infinite edges
+#ifndef CLIPPERLIB_INT32
     if (std::abs(edge->vertex0()->x()) > double(CLIPPER_MAX_COORD_UNSCALED) || 
         std::abs(edge->vertex0()->y()) > double(CLIPPER_MAX_COORD_UNSCALED) || 
         std::abs(edge->vertex1()->x()) > double(CLIPPER_MAX_COORD_UNSCALED) ||
         std::abs(edge->vertex1()->y()) > double(CLIPPER_MAX_COORD_UNSCALED))
         return false;
+#endif // CLIPPERLIB_INT32
 
     // construct the line representing this edge of the Voronoi diagram
     const Line line(

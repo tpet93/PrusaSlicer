@@ -18,7 +18,6 @@
 class wxBoxSizer;
 class wxBitmapComboBox;
 class wxMenuItem;
-class ObjectDataViewModel;
 class MenuWithSeparators;
 
 namespace Slic3r {
@@ -292,10 +291,9 @@ public:
     // #ys_FIXME_to_delete
     // Unselect all objects in the list on c++ side
     void unselect_objects();
-    // Select current object in the list on c++ side
-    void select_current_object(int idx);
-    // Select current volume in the list on c++ side
-    void select_current_volume(int idx, int vol_idx);
+    // Select object item in the ObjectList, when some gizmo is activated
+    // "is_msr_gizmo" indicates if Move/Scale/Rotate gizmo was activated
+    void select_object_item(bool is_msr_gizmo);
 
     // Remove objects/sub-object from the list
     void remove();
@@ -347,6 +345,7 @@ public:
     void update_and_show_object_settings_item();
     void update_settings_item_and_selection(wxDataViewItem item, wxDataViewItemArray& selections);
     void update_object_list_by_printer_technology();
+    void update_info_items(size_t obj_idx);
 
     void instances_to_separated_object(const int obj_idx, const std::set<int>& inst_idx);
     void instances_to_separated_objects(const int obj_idx);
@@ -391,7 +390,6 @@ private:
 	void OnEditingStarted(wxDataViewEvent &event);
 #endif /* __WXMSW__ */
     void OnEditingDone(wxDataViewEvent &event);
-    void extruder_selection();
 };
 
 

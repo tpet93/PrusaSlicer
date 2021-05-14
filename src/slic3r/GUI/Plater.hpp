@@ -128,7 +128,18 @@ public:
     Plater(const Plater &) = delete;
     Plater &operator=(Plater &&) = delete;
     Plater &operator=(const Plater &) = delete;
-    ~Plater();
+    ~Plater() = default;
+
+#if ENABLE_PROJECT_DIRTY_STATE
+    bool is_project_dirty() const;
+    void update_project_dirty_from_presets();
+    bool save_project_if_dirty();
+    void reset_project_dirty_after_save();
+    void reset_project_dirty_initial_presets();
+#if ENABLE_PROJECT_DIRTY_STATE_DEBUG_WINDOW
+    void render_project_state_debug_window() const;
+#endif // ENABLE_PROJECT_DIRTY_STATE_DEBUG_WINDOW
+#endif // ENABLE_PROJECT_DIRTY_STATE
 
     Sidebar& sidebar();
     Model& model();
@@ -191,13 +202,18 @@ public:
     bool is_selection_empty() const;
     void scale_selection_to_fit_print_volume();
     void convert_unit(ConversionType conv_type);
+    void toggle_layers_editing(bool enable);
 
     void cut(size_t obj_idx, size_t instance_idx, coordf_t z, bool keep_upper = true, bool keep_lower = true, bool rotate_lower = false);
 
     void export_gcode(bool prefer_removable);
     void export_stl(bool extended = false, bool selection_only = false);
     void export_amf();
+#if ENABLE_PROJECT_DIRTY_STATE
+    bool export_3mf(const boost::filesystem::path& output_path = boost::filesystem::path());
+#else
     void export_3mf(const boost::filesystem::path& output_path = boost::filesystem::path());
+#endif // ENABLE_PROJECT_DIRTY_STATE
     void reload_from_disk();
     void reload_all_from_disk();
     bool has_toolpaths_to_export() const;
@@ -227,6 +243,9 @@ public:
     // For the memory statistics. 
     const Slic3r::UndoRedo::Stack& undo_redo_stack_main() const;
     void clear_undo_redo_stack_main();
+#if ENABLE_PROJECT_DIRTY_STATE
+    const Slic3r::UndoRedo::Stack& undo_redo_stack_active() const;
+#endif // ENABLE_PROJECT_DIRTY_STATE
     // Enter / leave the Gizmos specific Undo / Redo stack. To be used by the SLA support point editing gizmo.
     void enter_gizmos_stack();
     void leave_gizmos_stack();
@@ -258,7 +277,7 @@ public:
     BoundingBoxf bed_shape_bb() const;
     
     void arrange();
-    void find_new_position(const ModelInstancePtrs  &instances, coord_t min_d);
+    void find_new_position(const ModelInstancePtrs  &instances);
 
     void set_current_canvas_as_dirty();
     void unbind_canvas_event_handlers();

@@ -267,15 +267,15 @@ private:
     // Shift in z required by sla supports+pad
     double        		  m_sla_shift_z;
     // Bounding box of this volume, in unscaled coordinates.
-    mutable BoundingBoxf3 m_transformed_bounding_box;
+    BoundingBoxf3 m_transformed_bounding_box;
     // Whether or not is needed to recalculate the transformed bounding box.
-    mutable bool          m_transformed_bounding_box_dirty;
+    bool          m_transformed_bounding_box_dirty;
     // Convex hull of the volume, if any.
     std::shared_ptr<const TriangleMesh> m_convex_hull;
     // Bounding box of this volume, in unscaled coordinates.
-    mutable BoundingBoxf3 m_transformed_convex_hull_bounding_box;
+    BoundingBoxf3 m_transformed_convex_hull_bounding_box;
     // Whether or not is needed to recalculate the transformed convex hull bounding box.
-    mutable bool          m_transformed_convex_hull_bounding_box_dirty;
+    bool          m_transformed_convex_hull_bounding_box_dirty;
 
 public:
     // Color of the triangles / quads held by this volume.
@@ -453,6 +453,11 @@ public:
     bool                is_sla_support() const;
     bool                is_sla_pad() const;
 
+#if ENABLE_ALLOW_NEGATIVE_Z
+    bool                is_sinking() const;
+    bool                is_below_printbed() const;
+#endif // ENABLE_ALLOW_NEGATIVE_Z
+
     // Return an estimate of the memory consumed by this class.
     size_t 				cpu_memory_used() const { 
     	//FIXME what to do wih m_convex_hull?
@@ -568,8 +573,8 @@ public:
 
     // returns true if all the volumes are completely contained in the print volume
     // returns the containment state in the given out_state, if non-null
-    bool check_outside_state(const DynamicPrintConfig* config, ModelInstanceEPrintVolumeState* out_state);
-    bool check_outside_state(const DynamicPrintConfig* config, bool& partlyOut, bool& fullyOut);
+    bool check_outside_state(const DynamicPrintConfig* config, ModelInstanceEPrintVolumeState* out_state) const;
+    bool check_outside_state(const DynamicPrintConfig* config, bool& partlyOut, bool& fullyOut) const;
     void reset_outside_state();
 
     void update_colors_by_extruder(const DynamicPrintConfig* config);
@@ -584,8 +589,6 @@ public:
     size_t 				total_memory_used() const { return this->cpu_memory_used() + this->gpu_memory_used(); }
     // Return CPU, GPU and total memory log line.
     std::string         log_memory_info() const;
-
-    bool                has_toolpaths_to_export() const;
 
 private:
     GLVolumeCollection(const GLVolumeCollection &other);
