@@ -1,6 +1,7 @@
 #include "GUI_ObjectManipulation.hpp"
 #include "GUI_ObjectList.hpp"
 #include "I18N.hpp"
+#include "BitmapComboBox.hpp"
 
 #include "GLCanvas3D.hpp"
 #include "OptionsGroup.hpp"
@@ -12,6 +13,7 @@
 #include "Selection.hpp"
 #include "Plater.hpp"
 #include "MainFrame.hpp"
+#include "MsgDialog.hpp"
 
 #include <boost/algorithm/string.hpp>
 #include "slic3r/Utils/FixModelByWin10.hpp"
@@ -64,7 +66,7 @@ static choice_ctrl* create_word_local_combo(wxWindow *parent)
     temp->SetTextCtrlStyle(wxTE_READONLY);
 	temp->Create(parent, wxID_ANY, wxString(""), wxDefaultPosition, size, 0, nullptr);
 #else
-	temp = new choice_ctrl(parent, wxID_ANY, wxString(""), wxDefaultPosition, size, 0, nullptr, wxCB_READONLY);
+	temp = new choice_ctrl(parent, wxID_ANY, wxString(""), wxDefaultPosition, size, 0, nullptr, wxCB_READONLY | wxBORDER_SIMPLE);
 #endif //__WXOSX__
 
     temp->SetFont(Slic3r::GUI::wxGetApp().normal_font());
@@ -198,7 +200,7 @@ ObjectManipulation::ObjectManipulation(wxWindow* parent) :
     auto add_label = [this, height](wxStaticText** label, const std::string& name, wxSizer* reciver = nullptr)
     {
         *label = new wxStaticText(m_parent, wxID_ANY, _(name) + ":");
-        set_font_and_background_style(m_move_Label, wxGetApp().normal_font());
+        set_font_and_background_style(*label, wxGetApp().normal_font());
 
         wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
         sizer->SetMinSize(wxSize(-1, height));
@@ -360,7 +362,7 @@ ObjectManipulation::ObjectManipulation(wxWindow* parent) :
             if (0 <= idx && idx < static_cast<int>(objects.size())) {
                 const ModelObject* mo = wxGetApp().model().objects[idx];
                 const double min_z = mo->bounding_box().min.z();
-                if (std::abs(min_z) > EPSILON) {
+                if (std::abs(min_z) > SINKING_Z_THRESHOLD) {
                     Plater::TakeSnapshot snapshot(wxGetApp().plater(), _L("Drop to bed"));
                     change_position_value(2, m_cache.position.z() - min_z);
                 }
@@ -513,7 +515,14 @@ void ObjectManipulation::update_ui_from_settings()
         int axis_id = 0;
         for (ManipulationEditor* editor : m_editors) {
 //            editor->SetForegroundColour(m_use_colors ? wxColour(axes_color_text[axis_id]) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
+#ifdef _WIN32
+            if (m_use_colors)
+                editor->SetBackgroundColour(wxColour(axes_color_back[axis_id]));
+            else
+                wxGetApp().UpdateDarkUI(editor);
+#else
             editor->SetBackgroundColour(m_use_colors ? wxColour(axes_color_back[axis_id]) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+#endif /* _WIN32 */
             if (++axis_id == 3)
                 axis_id = 0;
         }
@@ -702,7 +711,11 @@ void ObjectManipulation::update_reset_buttons_visibility()
         }
         show_rotation = !rotation.isApprox(Vec3d::Zero());
         show_scale = !scale.isApprox(Vec3d::Ones());
+#if ENABLE_ALLOW_NEGATIVE_Z
+        show_drop_to_bed = std::abs(min_z) > SINKING_Z_THRESHOLD;
+#else
         show_drop_to_bed = (std::abs(min_z) > EPSILON);
+#endif // ENABLE_ALLOW_NEGATIVE_Z
     }
 
     wxGetApp().CallAfter([this, show_rotation, show_scale, show_drop_to_bed] {
@@ -945,7 +958,8 @@ void ObjectManipulation::set_uniform_scaling(const bool new_value)
         // Is the angle close to a multiple of 90 degrees?
 		if (! Geometry::is_rotation_ninety_degrees(volume->get_instance_rotation())) {
             // Cannot apply scaling in the world coordinate system.
-			wxMessageDialog dlg(GUI::wxGetApp().mainframe,
+			//wxMessageDialog dlg(GUI::wxGetApp().mainframe,
+			MessageDialog dlg(GUI::wxGetApp().mainframe,
                 _L("The currently manipulated object is tilted (rotation angles are not multiples of 90°).\n"
                     "Non-uniform scaling of tilted objects is only possible in the World coordinate system,\n"
                     "once the rotation is embedded into the object coordinates.") + "\n" +
@@ -1011,6 +1025,14 @@ void ObjectManipulation::msw_rescale()
 
 void ObjectManipulation::sys_color_changed()
 {
+#ifdef _WIN32
+    get_og()->sys_color_changed();
+    wxGetApp().UpdateDarkUI(m_word_local_combo);
+    wxGetApp().UpdateDarkUI(m_check_inch);
+
+    for (ManipulationEditor* editor : m_editors)
+        editor->sys_color_changed(this);
+#endif
     // btn...->msw_rescale() updates icon on button, so use it
     m_mirror_bitmap_on.msw_rescale();
     m_mirror_bitmap_off.msw_rescale();
@@ -1022,8 +1044,6 @@ void ObjectManipulation::sys_color_changed()
 
     for (int id = 0; id < 3; ++id)
         m_mirror_buttons[id].first->msw_rescale();
-
-    get_og()->sys_color_changed();
 }
 
 static const char axes[] = { 'x', 'y', 'z' };
@@ -1031,7 +1051,11 @@ ManipulationEditor::ManipulationEditor(ObjectManipulation* parent,
                                        const std::string& opt_key,
                                        int axis) :
     wxTextCtrl(parent->parent(), wxID_ANY, wxEmptyString, wxDefaultPosition,
-        wxSize((wxOSX ? 5 : 6)*int(wxGetApp().em_unit()), wxDefaultCoord), wxTE_PROCESS_ENTER),
+        wxSize((wxOSX ? 5 : 6)*int(wxGetApp().em_unit()), wxDefaultCoord), wxTE_PROCESS_ENTER
+#ifdef _WIN32
+        | wxBORDER_SIMPLE
+#endif 
+    ),
     m_opt_key(opt_key),
     m_axis(axis)
 {
@@ -1040,8 +1064,9 @@ ManipulationEditor::ManipulationEditor(ObjectManipulation* parent,
     this->OSXDisableAllSmartSubstitutions();
 #endif // __WXOSX__
     if (parent->use_colors()) {
-//        this->SetForegroundColour(wxColour(axes_color_text[axis]));
         this->SetBackgroundColour(wxColour(axes_color_back[axis]));
+    } else {
+        wxGetApp().UpdateDarkUI(this);
     }
 
     // A name used to call handle_sidebar_focus_event()
@@ -1090,20 +1115,30 @@ void ManipulationEditor::msw_rescale()
     SetMinSize(wxSize(5 * em, wxDefaultCoord));
 }
 
+void ManipulationEditor::sys_color_changed(ObjectManipulation* parent)
+{
+    if (!parent->use_colors())
+        wxGetApp().UpdateDarkUI(this);
+}
+
 double ManipulationEditor::get_value()
 {
     wxString str = GetValue();
 
     double value;
-    // Replace the first occurence of comma in decimal number.
-    str.Replace(",", ".", false);
+    const char dec_sep = is_decimal_separator_point() ? '.' : ',';
+    const char dec_sep_alt = dec_sep == '.' ? ',' : '.';
+    // Replace the first incorrect separator in decimal number.
+    if (str.Replace(dec_sep_alt, dec_sep, false) != 0)
+        SetValue(str);
+
     if (str == ".")
         value = 0.0;
 
-    if ((str.IsEmpty() || !str.ToCDouble(&value)) && !m_valid_value.IsEmpty()) {
+    if ((str.IsEmpty() || !str.ToDouble(&value)) && !m_valid_value.IsEmpty()) {
         str = m_valid_value;
         SetValue(str);
-        str.ToCDouble(&value);
+        str.ToDouble(&value);
     }
 
     return value;

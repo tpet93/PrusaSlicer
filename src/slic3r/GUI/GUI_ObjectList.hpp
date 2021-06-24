@@ -39,6 +39,7 @@ typedef std::map<t_layer_height_range, ModelConfig> t_layer_config_ranges;
 namespace GUI {
 
 wxDECLARE_EVENT(EVT_OBJ_LIST_OBJECT_SELECT, SimpleEvent);
+class BitmapComboBox;
 
 struct ItemForDelete
 {
@@ -144,7 +145,7 @@ private:
     ModelConfig                 *m_config {nullptr};
     std::vector<ModelObject*>   *m_objects{ nullptr };
 
-    wxBitmapComboBox            *m_extruder_editor { nullptr };
+    BitmapComboBox              *m_extruder_editor { nullptr };
 
     std::vector<wxBitmap*>      m_bmp_vector;
 
@@ -238,7 +239,7 @@ public:
     bool                is_instance_or_object_selected();
 
     void                load_subobject(ModelVolumeType type);
-    void                load_part(ModelObject* model_object, std::vector<std::pair<wxString, bool>> &volumes_info, ModelVolumeType type);
+    void                load_part(ModelObject* model_object, std::vector<ModelVolume*> &added_volumes, ModelVolumeType type);
 	void                load_generic_subobject(const std::string& type_name, const ModelVolumeType type);
     void                load_shape_object(const std::string &type_name);
     void                load_mesh_object(const TriangleMesh &mesh, const wxString &name, bool center = true);
@@ -371,6 +372,8 @@ public:
     void toggle_printable_state();
 
     void set_extruder_for_selected_items(const int extruder) const ;
+    wxDataViewItemArray reorder_volumes_and_get_selection(int obj_idx, std::function<bool(const ModelVolume*)> add_to_selection = nullptr);
+    void apply_volumes_order();
 
 private:
 #ifdef __WXOSX__

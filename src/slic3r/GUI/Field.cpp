@@ -13,10 +13,12 @@
 #include <wx/numformatter.h>
 #include <wx/tooltip.h>
 #include <wx/notebook.h>
+#include <wx/listbook.h>
 #include <wx/tokenzr.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include "OG_CustomCtrl.hpp"
 #include "MsgDialog.hpp"
+#include "BitmapComboBox.hpp"
 
 #ifdef __WXOSX__
 #define wxOSX true
@@ -37,12 +39,13 @@ wxString double_to_string(double const value, const int max_precision /*= 4*/)
 	// with the exception that here one sets the decimal separator explicitely to dot.
     // If number is in scientific format, trailing zeroes belong to the exponent and cannot be removed.
     if (s.find_first_of("eE") == wxString::npos) {
-	    const size_t posDecSep = s.find(".");
+        char dec_sep = is_decimal_separator_point() ? '.' : ',';
+        const size_t posDecSep = s.find(dec_sep);
 	    // No decimal point => removing trailing zeroes irrelevant for integer number.
 	    if (posDecSep != wxString::npos) {
 		    // Find the last character to keep.
 		    size_t posLastNonZero = s.find_last_not_of("0");
-		    // If it's the decimal separator itself, don't keep it neither.
+            // If it's the decimal separator itself, don't keep it either.
 		    if (posLastNonZero == posDecSep)
 		        -- posLastNonZero;
 		    s.erase(posLastNonZero + 1);
@@ -236,16 +239,22 @@ void Field::get_value_by_opt_type(wxString& str, const bool check_value/* = true
 			m_value = double(m_opt.min);
 			break;
 		}
-		double val;
-		// Replace the first occurence of comma in decimal number.
-		str.Replace(",", ".", false);
-        if (str == ".")
+        double val;
+
+        const char dec_sep = is_decimal_separator_point() ? '.' : ',';
+        const char dec_sep_alt = dec_sep == '.' ? ',' : '.';
+        // Replace the first incorrect separator in decimal number.
+        if (str.Replace(dec_sep_alt, dec_sep, false) != 0)
+            set_value(str, false);
+
+
+        if (str == dec_sep)
             val = 0.0;
         else
         {
             if (m_opt.nullable && str == na_value())
                 val = ConfigOptionFloatsNullable::nil_value();
-            else if (!str.ToCDouble(&val))
+            else if (!str.ToDouble(&val))
             {
                 if (!check_value) {
                     m_value.clear();
@@ -293,14 +302,18 @@ void Field::get_value_by_opt_type(wxString& str, const bool check_value/* = true
         if (m_opt.type == coFloatOrPercent && !str.IsEmpty() &&  str.Last() != '%')
         {
             double val = 0.;
-			// Replace the first occurence of comma in decimal number.
-			str.Replace(",", ".", false);
+            const char dec_sep = is_decimal_separator_point() ? '.' : ',';
+            const char dec_sep_alt = dec_sep == '.' ? ',' : '.';
+            // Replace the first incorrect separator in decimal number.
+            if (str.Replace(dec_sep_alt, dec_sep, false) != 0)
+                set_value(str, false);
+
 
             // remove space and "mm" substring, if any exists
             str.Replace(" ", "", true);
             str.Replace("m", "", true);
 
-            if (!str.ToCDouble(&val))
+            if (!str.ToDouble(&val))
             {
                 if (!check_value) {
                     m_value.clear();
@@ -400,6 +413,10 @@ void Field::msw_rescale()
 
 void Field::sys_color_changed()
 {
+#ifdef _WIN32
+	if (wxWindow* win = this->getWindow())
+		wxGetApp().UpdateDarkUI(win);
+#endif
 }
 
 template<class T>
@@ -461,13 +478,17 @@ void TextCtrl::BUILD() {
 		break;
 	}
 
-    const long style = m_opt.multiline ? wxTE_MULTILINE : wxTE_PROCESS_ENTER/*0*/;
+    long style = m_opt.multiline ? wxTE_MULTILINE : wxTE_PROCESS_ENTER;
+#ifdef _WIN32
+	style |= wxBORDER_SIMPLE;
+#endif
 	auto temp = new wxTextCtrl(m_parent, wxID_ANY, text_value, wxDefaultPosition, size, style);
     if (parent_is_custom_ctrl && m_opt.height < 0)
         opt_height = (double)temp->GetSize().GetHeight()/m_em_unit;
     temp->SetFont(m_opt.is_code ?
                   Slic3r::GUI::wxGetApp().code_font():
                   Slic3r::GUI::wxGetApp().normal_font());
+	wxGetApp().UpdateDarkUI(temp);
 
     if (! m_opt.multiline && !wxOSX)
 		// Only disable background refresh for single line input fields, as they are completely painted over by the edit control.
@@ -785,7 +806,12 @@ void SpinCtrl::BUILD() {
 	const int max_val = m_opt.max < 2147483647 ? m_opt.max : 2147483647;
 
 	auto temp = new wxSpinCtrl(m_parent, wxID_ANY, text_value, wxDefaultPosition, size,
-		0|wxTE_PROCESS_ENTER, min_val, max_val, default_value);
+		wxTE_PROCESS_ENTER | wxSP_ARROW_KEYS
+#ifdef _WIN32
+		| wxBORDER_SIMPLE
+#endif 
+		, min_val, max_val, default_value);
+
 #ifdef __WXGTK3__
 	wxSize best_sz = temp->GetBestSize();
 	if (best_sz.x > size.x)
@@ -793,6 +819,7 @@ void SpinCtrl::BUILD() {
 #endif //__WXGTK3__
 	temp->SetFont(Slic3r::GUI::wxGetApp().normal_font());
     if (!wxOSX) temp->SetBackgroundStyle(wxBG_STYLE_PAINT);
+	wxGetApp().UpdateDarkUI(temp);
 
     if (m_opt.height < 0 && parent_is_custom_ctrl)
         opt_height = (double)temp->GetSize().GetHeight() / m_em_unit;
@@ -893,7 +920,11 @@ void SpinCtrl::msw_rescale()
 static_assert(wxMAJOR_VERSION >= 3, "Use of wxBitmapComboBox on Settings Tabs requires wxWidgets 3.0 and newer");
 using choice_ctrl = wxBitmapComboBox;
 #else
+#ifdef _WIN32
+using choice_ctrl = BitmapComboBox;
+#else
 using choice_ctrl = wxComboBox;
+#endif
 #endif // __WXOSX__
 
 void Choice::BUILD() {
@@ -1206,7 +1237,7 @@ boost::any& Choice::get_value()
         else if (m_opt.type == coInt)
             m_value = atoi(m_opt.enum_values[ret_enum].c_str());
         else
-            m_value = atof(m_opt.enum_values[ret_enum].c_str());
+            m_value = string_to_double_decimal_point(m_opt.enum_values[ret_enum]);
     }
 	else
 		// modifies ret_string!
@@ -1215,8 +1246,8 @@ boost::any& Choice::get_value()
 	return m_value;
 }
 
-void Choice::enable()  { dynamic_cast<choice_ctrl*>(window)->Enable(); };
-void Choice::disable() { dynamic_cast<choice_ctrl*>(window)->Disable(); };
+void Choice::enable()  { dynamic_cast<choice_ctrl*>(window)->Enable(); }
+void Choice::disable() { dynamic_cast<choice_ctrl*>(window)->Disable(); }
 
 void Choice::msw_rescale()
 {
@@ -1287,6 +1318,8 @@ void ColourPicker::BUILD()
         opt_height = (double)temp->GetSize().GetHeight() / m_em_unit;
     temp->SetFont(Slic3r::GUI::wxGetApp().normal_font());
     if (!wxOSX) temp->SetBackgroundStyle(wxBG_STYLE_PAINT);
+
+	wxGetApp().UpdateDarkUI(temp->GetPickerCtrl());
 
 	// 	// recast as a wxWindow to fit the calling convention
 	window = dynamic_cast<wxWindow*>(temp);
@@ -1361,6 +1394,15 @@ void ColourPicker::msw_rescale()
         set_undef_value(field);
 }
 
+void ColourPicker::sys_color_changed()
+{
+#ifdef _WIN32
+	if (wxWindow* win = this->getWindow())
+		if (wxColourPickerCtrl* picker = dynamic_cast<wxColourPickerCtrl*>(win))
+			wxGetApp().UpdateDarkUI(picker->GetPickerCtrl(), true);
+#endif
+}
+
 void PointCtrl::BUILD()
 {
 	auto temp = new wxBoxSizer(wxHORIZONTAL);
@@ -1373,8 +1415,12 @@ void PointCtrl::BUILD()
 	val = default_pt(1);
 	wxString Y = val - int(val) == 0 ? wxString::Format(_T("%i"), int(val)) : wxNumberFormatter::ToString(val, 2, wxNumberFormatter::Style_None);
 
-	x_textctrl = new wxTextCtrl(m_parent, wxID_ANY, X, wxDefaultPosition, field_size, wxTE_PROCESS_ENTER);
-	y_textctrl = new wxTextCtrl(m_parent, wxID_ANY, Y, wxDefaultPosition, field_size, wxTE_PROCESS_ENTER);
+	long style = wxTE_PROCESS_ENTER;
+#ifdef _WIN32
+	style |= wxBORDER_SIMPLE;
+#endif
+	x_textctrl = new wxTextCtrl(m_parent, wxID_ANY, X, wxDefaultPosition, field_size, style);
+	y_textctrl = new wxTextCtrl(m_parent, wxID_ANY, Y, wxDefaultPosition, field_size, style);
     if (parent_is_custom_ctrl && m_opt.height < 0)
         opt_height = (double)x_textctrl->GetSize().GetHeight() / m_em_unit;
 
@@ -1389,6 +1435,11 @@ void PointCtrl::BUILD()
 	static_text_x->SetBackgroundStyle(wxBG_STYLE_PAINT);
 	static_text_y->SetFont(Slic3r::GUI::wxGetApp().normal_font());
 	static_text_y->SetBackgroundStyle(wxBG_STYLE_PAINT);
+
+	wxGetApp().UpdateDarkUI(x_textctrl);
+	wxGetApp().UpdateDarkUI(y_textctrl);
+	wxGetApp().UpdateDarkUI(static_text_x, false, true);
+	wxGetApp().UpdateDarkUI(static_text_y, false, true);
 
 	temp->Add(static_text_x, 0, wxALIGN_CENTER_VERTICAL, 0);
 	temp->Add(x_textctrl);
@@ -1423,6 +1474,15 @@ void PointCtrl::msw_rescale()
         x_textctrl->SetMinSize(field_size);
         y_textctrl->SetMinSize(field_size);
     }
+}
+
+void PointCtrl::sys_color_changed()
+{
+#ifdef _WIN32
+    for (wxSizerItem* item: sizer->GetChildren())
+        if (item->IsWindow())
+            wxGetApp().UpdateDarkUI(item->GetWindow());
+#endif
 }
 
 bool PointCtrl::value_was_changed(wxTextCtrl* win)
@@ -1478,7 +1538,7 @@ boost::any& PointCtrl::get_value()
 		!y_textctrl->GetValue().ToDouble(&y))
 	{
 		set_value(m_value.empty() ? Vec2d(0.0, 0.0) : m_value, true);
-		show_error(m_parent, _L("Invalid numeric input."));
+        show_error(m_parent, _L("Invalid numeric input."));
 	}
 	else
 	if (m_opt.min > x || x > m_opt.max ||
@@ -1507,6 +1567,8 @@ void StaticText::BUILD()
 	temp->SetFont(Slic3r::GUI::wxGetApp().normal_font());
 	temp->SetBackgroundStyle(wxBG_STYLE_PAINT);
     temp->SetFont(wxGetApp().bold_font());
+
+	wxGetApp().UpdateDarkUI(temp);
 
 	// 	// recast as a wxWindow to fit the calling convention
 	window = dynamic_cast<wxWindow*>(temp);

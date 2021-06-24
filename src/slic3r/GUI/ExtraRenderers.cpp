@@ -139,7 +139,12 @@ bool BitmapTextRenderer::Render(wxRect rect, wxDC *dc, int state)
     }
     else
 #endif // SUPPORTS_MARKUP && wxHAS_GENERIC_DATAVIEWCTRL
+#ifdef _WIN32 
+        // workaround for Windows DarkMode : Don't respect to the state & wxDATAVIEW_CELL_SELECTED to avoid update of the text color
+        RenderText(m_value.GetText(), xoffset, rect, dc, state & wxDATAVIEW_CELL_SELECTED ? 0 :state);
+#else
         RenderText(m_value.GetText(), xoffset, rect, dc, state);
+#endif
 
     return true;
 }
@@ -258,7 +263,12 @@ bool BitmapChoiceRenderer::Render(wxRect rect, wxDC* dc, int state)
           rect.height= icon.GetHeight();
     }
 
+#ifdef _WIN32
+    // workaround for Windows DarkMode : Don't respect to the state & wxDATAVIEW_CELL_SELECTED to avoid update of the text color
+    RenderText(m_value.GetText(), xoffset, rect, dc, state & wxDATAVIEW_CELL_SELECTED ? 0 : state);
+#else
     RenderText(m_value.GetText(), xoffset, rect, dc, state);
+#endif
 
     return true;
 }
@@ -290,16 +300,11 @@ wxWindow* BitmapChoiceRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelR
         labelRect.GetTopLeft(), wxSize(labelRect.GetWidth(), -1), 
         0, nullptr , wxCB_READONLY);
 
-    int i=0;
-    for (wxBitmap* bmp : icons) {
-        if (i==0) {
-            c_editor->Append(_L("default"), *bmp);
-            ++i;
-        }
+    int def_id = get_default_extruder_idx ? get_default_extruder_idx() : 0;
+    c_editor->Append(_L("default"), def_id < 0 ? wxNullBitmap : *icons[def_id]);
+    for (size_t i = 0; i < icons.size(); i++)
+        c_editor->Append(wxString::Format("%d", i+1), *icons[i]);
 
-        c_editor->Append(wxString::Format("%d", i), *bmp);
-        ++i;
-    }
     c_editor->SetSelection(atoi(data.GetText().c_str()));
 
     // to avoid event propagation to other sidebar items

@@ -19,8 +19,6 @@
 #include <libnest2d/tools/benchmark.h>
 #endif
 
-//#include <tbb/spin_mutex.h>//#include "tbb/mutex.h"
-
 #include "I18N.hpp"
 
 //! macro used to mark string used at localization,
@@ -109,7 +107,7 @@ sla::PadConfig make_pad_cfg(const SLAPrintObjectConfig& c)
     return pcfg;
 }
 
-bool validate_pad(const TriangleMesh &pad, const sla::PadConfig &pcfg) 
+bool validate_pad(const indexed_triangle_set &pad, const sla::PadConfig &pcfg)
 {
     // An empty pad can only be created if embed_object mode is enabled
     // and the pad is not forced everywhere
@@ -118,7 +116,7 @@ bool validate_pad(const TriangleMesh &pad, const sla::PadConfig &pcfg)
 
 void SLAPrint::clear()
 {
-    tbb::mutex::scoped_lock lock(this->state_mutex());
+    std::scoped_lock<std::mutex> lock(this->state_mutex());
     // The following call should stop background processing if it is running.
     this->invalidate_all_steps();
     for (SLAPrintObject *object : m_objects)
@@ -212,7 +210,7 @@ SLAPrint::ApplyStatus SLAPrint::apply(const Model &model, DynamicPrintConfig con
         update_apply_status(false);
 
     // Grab the lock for the Print / PrintObject milestones.
-    tbb::mutex::scoped_lock lock(this->state_mutex());
+    std::scoped_lock<std::mutex> lock(this->state_mutex());
 
     // The following call may stop the background processing.
     bool invalidate_all_model_objects = false;
@@ -514,7 +512,7 @@ SLAPrint::ApplyStatus SLAPrint::apply(const Model &model, DynamicPrintConfig con
 void SLAPrint::set_task(const TaskParams &params)
 {
     // Grab the lock for the Print / PrintObject milestones.
-    tbb::mutex::scoped_lock lock(this->state_mutex());
+    std::scoped_lock<std::mutex> lock(this->state_mutex());
 
     int n_object_steps = int(params.to_object_step) + 1;
     if (n_object_steps == 0)
@@ -884,7 +882,7 @@ bool SLAPrint::is_step_done(SLAPrintObjectStep step) const
 {
     if (m_objects.empty())
         return false;
-    tbb::mutex::scoped_lock lock(this->state_mutex());
+    std::scoped_lock<std::mutex> lock(this->state_mutex());
     for (const SLAPrintObject *object : m_objects)
         if (! object->is_step_done_unguarded(step))
             return false;
@@ -930,10 +928,10 @@ bool SLAPrintObject::invalidate_state_by_config_options(const std::vector<t_conf
             || opt_key == "support_object_elevation"
             || opt_key == "pad_around_object"
             || opt_key == "pad_around_object_everywhere"
-            || opt_key == "slice_closing_radius") {
+            || opt_key == "slice_closing_radius"
+            || opt_key == "slicing_mode") {
             steps.emplace_back(slaposObjectSlice);
         } else if (
-
                opt_key == "support_points_density_relative"
             || opt_key == "support_points_minimal_distance") {
             steps.emplace_back(slaposSupportPoints);
@@ -1067,6 +1065,7 @@ Vec3d SLAPrint::relative_correction() const
 namespace { // dummy empty static containers for return values in some methods
 const std::vector<ExPolygons> EMPTY_SLICES;
 const TriangleMesh EMPTY_MESH;
+const indexed_triangle_set EMPTY_TRIANGLE_SET;
 const ExPolygons EMPTY_SLICE;
 const std::vector<sla::SupportPoint> EMPTY_SUPPORT_POINTS;
 }
@@ -1129,31 +1128,27 @@ TriangleMesh SLAPrintObject::get_mesh(SLAPrintObjectStep step) const
 
 const TriangleMesh& SLAPrintObject::support_mesh() const
 {
-    sla::SupportTree::UPtr &stree = m_supportdata->support_tree_ptr;
-    
-    if(m_config.supports_enable.getBool() && m_supportdata && stree)
-        return stree->retrieve_mesh(sla::MeshType::Support);
+    if(m_config.supports_enable.getBool() && m_supportdata)
+        return m_supportdata->tree_mesh;
     
     return EMPTY_MESH;
 }
 
 const TriangleMesh& SLAPrintObject::pad_mesh() const
 {
-    sla::SupportTree::UPtr &stree = m_supportdata->support_tree_ptr;
-    
-    if(m_config.pad_enable.getBool() && m_supportdata && stree)
-        return stree->retrieve_mesh(sla::MeshType::Pad);
+    if(m_config.pad_enable.getBool() && m_supportdata)
+        return m_supportdata->pad_mesh;
 
     return EMPTY_MESH;
 }
 
-const TriangleMesh &SLAPrintObject::hollowed_interior_mesh() const
+const indexed_triangle_set &SLAPrintObject::hollowed_interior_mesh() const
 {
     if (m_hollowing_data && m_hollowing_data->interior &&
         m_config.hollowing_enable.getBool())
         return sla::get_mesh(*m_hollowing_data->interior);
     
-    return EMPTY_MESH;
+    return EMPTY_TRIANGLE_SET;
 }
 
 const TriangleMesh &SLAPrintObject::transformed_mesh() const {
