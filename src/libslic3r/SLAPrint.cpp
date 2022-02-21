@@ -1,6 +1,10 @@
 #include "SLAPrint.hpp"
 #include "SLAPrintSteps.hpp"
 
+#include "Format/SL1.hpp"
+#include "Format/SL1_SVG.hpp"
+#include "Format/pwmx.hpp"
+
 #include "ClipperUtils.hpp"
 #include "Geometry.hpp"
 #include "MTUtils.hpp"
@@ -138,14 +142,14 @@ Transform3d SLAPrint::sla_trafo(const ModelObject &model_object) const
     offset(1) = 0.;
     rotation(2) = 0.;
 
-    offset(Z) *= corr(Z);
+    offset.z() *= corr.z();
 
     auto trafo = Transform3d::Identity();
     trafo.translate(offset);
     trafo.scale(corr);
-    trafo.rotate(Eigen::AngleAxisd(rotation(2), Vec3d::UnitZ()));
-    trafo.rotate(Eigen::AngleAxisd(rotation(1), Vec3d::UnitY()));
-    trafo.rotate(Eigen::AngleAxisd(rotation(0), Vec3d::UnitX()));
+    trafo.rotate(Eigen::AngleAxisd(rotation.z(), Vec3d::UnitZ()));
+    trafo.rotate(Eigen::AngleAxisd(rotation.y(), Vec3d::UnitY()));
+    trafo.rotate(Eigen::AngleAxisd(rotation.x(), Vec3d::UnitX()));
     trafo.scale(model_instance.get_scaling_factor());
     trafo.scale(model_instance.get_mirror());
 
@@ -240,8 +244,9 @@ SLAPrint::ApplyStatus SLAPrint::apply(const Model &model, DynamicPrintConfig con
     m_material_config.apply_only(config, material_diff, true);
     // Handle changes to object config defaults
     m_default_object_config.apply_only(config, object_diff, true);
-    
-    if (m_printer) m_printer->apply(m_printer_config);
+
+    if (!m_archiver || !printer_diff.empty())
+        m_archiver = SLAArchive::create(m_printer_config.sla_archive_format.value.c_str(), m_printer_config);
 
     struct ModelObjectStatus {
         enum Status {
@@ -670,12 +675,6 @@ std::string SLAPrint::validate(std::string*) const
     return "";
 }
 
-void SLAPrint::set_printer(SLAPrinter *arch)
-{
-    invalidate_step(slapsRasterize);
-    m_printer = arch;
-}
-
 bool SLAPrint::invalidate_step(SLAPrintStep step)
 {
     bool invalidated = Inherited::invalidate_step(step);
@@ -693,7 +692,7 @@ void SLAPrint::process()
     if (m_objects.empty())
         return;
 
-    name_tbb_thread_pool_threads();
+    name_tbb_thread_pool_threads_set_locale();
 
     // Assumption: at this point the print objects should be populated only with
     // the model objects we have to process and the instances are also filtered
@@ -807,7 +806,13 @@ bool SLAPrint::invalidate_state_by_config_options(const std::vector<t_config_opt
     static std::unordered_set<std::string> steps_full = {
         "initial_layer_height",
         "material_correction",
+        "material_correction_x",
+        "material_correction_y",
+        "material_correction_z",
         "relative_correction",
+        "relative_correction_x",
+        "relative_correction_y",
+        "relative_correction_z",
         "absolute_correction",
         "elefant_foot_compensation",
         "elefant_foot_min_width",
@@ -829,7 +834,9 @@ bool SLAPrint::invalidate_state_by_config_options(const std::vector<t_config_opt
         "display_pixels_y",
         "display_mirror_x",
         "display_mirror_y",
-        "display_orientation"
+        "display_orientation",
+        "sla_archive_format",
+        "sla_output_precision"
     };
 
     static std::unordered_set<std::string> steps_ignore = {
@@ -896,7 +903,6 @@ SLAPrintObject::SLAPrintObject(SLAPrint *print, ModelObject *model_object)
         obj = m_model_object->raw_mesh();
         if (!obj.empty()) {
             obj.transform(m_trafo);
-            obj.require_shared_vertices();
         }
     })
 {}
@@ -1048,15 +1054,15 @@ Vec3d SLAPrint::relative_correction() const
     Vec3d corr(1., 1., 1.);
 
     if(printer_config().relative_correction.values.size() >= 2) {
-        corr(X) = printer_config().relative_correction.values[0];
-        corr(Y) = printer_config().relative_correction.values[0];
-        corr(Z) = printer_config().relative_correction.values.back();
+        corr.x() = printer_config().relative_correction_x.value;
+        corr.y() = printer_config().relative_correction_y.value;
+        corr.z() = printer_config().relative_correction_z.value;
     }
 
     if(material_config().material_correction.values.size() >= 2) {
-        corr(X) *= material_config().material_correction.values[0];
-        corr(Y) *= material_config().material_correction.values[0];
-        corr(Z) *= material_config().material_correction.values.back();
+        corr.x() *= material_config().material_correction_x.value;
+        corr.y() *= material_config().material_correction_y.value;
+        corr.z() *= material_config().material_correction_z.value;
     }
 
     return corr;
@@ -1217,7 +1223,7 @@ DynamicConfig SLAPrintStatistics::config() const
 DynamicConfig SLAPrintStatistics::placeholders()
 {
     DynamicConfig config;
-    for (const std::string &key : {
+    for (const char *key : {
         "print_time", "total_cost", "total_weight",
         "objects_used_material", "support_used_material" })
         config.set_key_value(key, new ConfigOptionString(std::string("{") + key + "}"));
